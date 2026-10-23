@@ -15,6 +15,7 @@ import { Plan2D } from './view2d/plan2d.js';
 import { libraryPanel, structurePanel, toolsPanel, morePanel } from './ui/panels.js';
 import { renderInspector } from './ui/inspector.js';
 import { openImportWizard } from './ui/import-wizard.js';
+import { AI_RULES } from './ui/ai-rules.js';
 import { FEATURE_TABLE } from './core/device.js';
 
 const $ = (s) => document.querySelector(s);
@@ -498,12 +499,26 @@ class App {
     d.body.append(...[
       h('div.section', {}, h('h3', {}, t('help.workflow')), h('ol.hint', {}, ...t('help.workflowSteps').split('|').map((s) => h('li', {}, s)))),
       h('div.section', {}, h('h3', {}, t('help.drawio')), h('ul.hint', {}, ...t('help.drawioRules').split('|').map((s) => h('li', {}, s)))),
+      this.aiRulesSection(),
       h('div.section', {}, h('h3', {}, t('help.devices')), h('p.hint', {}, t('help.devicesText', { device: t(`settings.${this.device}`) })),
         h('div.kv', {}, ...FEATURE_TABLE.flatMap(([k, dev]) => [h('dt', {}, t(`feature.${k}`)), h('dd', {}, h(`span.badge${this.flags[k] ? '.ok' : ''}`, {}, t(`settings.${dev}`)))]))),
       this.flags.keyboard ? h('div.section', {}, h('h3', {}, t('help.keys')), h('div.kv', {}, ...kbd.flatMap(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', { style: { textAlign: 'left' } }, v)]))) : null,
       h('div.section', {}, h('h3', {}, t('help.privacy')), h('p.hint', {}, t('help.privacyText'))),
     ].filter(Boolean));
     d.foot.append(h('a.btn.ghost', { href: repoUrl(), target: '_blank', rel: 'noopener' }, 'GitHub'), h('button.btn.primary', { onclick: () => d.close() }, t('common.close')));
+  }
+  /** Copyable rules for an AI assistant that has to generate a draw.io file Murello can read. */
+  aiRulesSection() {
+    const t = this.t;
+    const text = AI_RULES[this.lang] || AI_RULES.it;
+    const area = h('textarea.code.ai-rules', { readonly: true, rows: 12, 'aria-label': t('help.ai') }, text);
+    const copy = async () => {
+      try { await navigator.clipboard.writeText(text); }
+      catch { area.select(); document.execCommand('copy'); }
+      this.toast(t('help.aiCopied'));
+    };
+    return h('div.section', {}, h('h3', {}, t('help.ai')), h('p.hint', {}, t('help.aiText')), area,
+      h('div.row', { style: { marginTop: '6px' } }, h('button.btn.small', { type: 'button', onclick: copy }, icon('copy'), t('help.aiCopy'))));
   }
 }
 

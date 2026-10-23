@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/labels.test.mjs && node tests/roundtrip.test.mjs",
+    "test": "node tests/labels.test.mjs && node tests/roundtrip.test.mjs && node tests/autofix.test.mjs",
     "serve": "python3 -m http.server 8080"
   },
   "devDependencies": { "linkedom": "^0.18.0" },

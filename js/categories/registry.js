@@ -73,11 +73,12 @@ export const BUILTIN_RULES = [
   { id: 'b-fp-dim', name: 'draw.io Floorplan · dimension', kind: 'dimension', when: [{ field: 'shape', op: 'regex', value: 'dimension' }] },
   { id: 'b-fp-stairs', name: 'draw.io Floorplan · stairs', kind: 'stairs', when: [{ field: 'shape', op: 'regex', value: 'floorplan\\.(stairs|spiralstairs|stairsrest)' }] },
   { id: 'b-fp-furn', name: 'draw.io Floorplan · furniture', kind: 'furniture', auto: 'model', when: [{ field: 'shape', op: 'regex', value: 'floorplan\\.' }] },
-  { id: 'b-kw-door', name: 'Label: door', kind: 'door', when: [{ field: 'label', op: 'regex', value: '^(porta|door|portone|ingresso)\\b' }] },
-  { id: 'b-kw-window', name: 'Label: window', kind: 'window', when: [{ field: 'label', op: 'regex', value: '^(finestra|window|portafinestra|lucernario)\\b' }] },
-  { id: 'b-kw-opening', name: 'Label: opening', kind: 'opening', when: [{ field: 'label', op: 'regex', value: '^(varco|arco|passaggio|opening|arch)\\b' }] },
-  { id: 'b-kw-column', name: 'Label: column', kind: 'column', when: [{ field: 'label', op: 'regex', value: '^(pilastro|colonna|column|pillar)\\b' }] },
-  { id: 'b-kw-stairs', name: 'Label: stairs', kind: 'stairs', when: [{ field: 'label', op: 'regex', value: '^(scala|scale|stairs?)\\b' }] },
+  // keyword rules apply to shapes only: a plain text "Ingresso" or "porta d'ingresso" is a note, not a door
+  { id: 'b-kw-door', name: 'Label: door', kind: 'door', notText: true, when: [{ field: 'label', op: 'regex', value: '^(porta|door|portone)\\b' }] },
+  { id: 'b-kw-window', name: 'Label: window', kind: 'window', notText: true, when: [{ field: 'label', op: 'regex', value: '^(finestra|window|portafinestra|lucernario)\\b' }] },
+  { id: 'b-kw-opening', name: 'Label: opening', kind: 'opening', notText: true, when: [{ field: 'label', op: 'regex', value: '^(varco|arco|passaggio|opening|arch)\\b' }] },
+  { id: 'b-kw-column', name: 'Label: column', kind: 'column', notText: true, when: [{ field: 'label', op: 'regex', value: '^(pilastro|colonna|column|pillar)\\b' }] },
+  { id: 'b-kw-stairs', name: 'Label: stairs', kind: 'stairs', notText: true, when: [{ field: 'label', op: 'regex', value: '^(scala|scale|stairs?)\\b' }] },
 ];
 
 function fieldValue(cell, f) {
@@ -146,6 +147,7 @@ export function classifyCell(cell, userRules = []) {
   // 2. User rules, then builtin rules.
   for (const r of userRules) if (ruleMatches(r, cell)) return { kind: r.kind, params: { ...(r.params || {}) }, rule: r };
   for (const r of BUILTIN_RULES) {
+    if (r.notText && isTextCell(cell)) continue;
     if (ruleMatches(r, cell)) {
       const params = { ...(r.params || {}) };
       if (r.auto === 'model') params.model = guessModel(cell.shapeName + ' ' + cell.text) || 'box';
@@ -165,8 +167,7 @@ export function classifyCell(cell, userRules = []) {
   const shape = cell.shapeName;
   if (shape === 'group' || (cell.hasChildren && !cell.text && (st.fillColor === 'none' || !st.fillColor) && (st.strokeColor === 'none'))) return { kind: 'ignore', params: {} };
   if (shape === 'line' || st.line || st._first === 'line') return { kind: 'wall', params: {}, heuristic: true, lineVertex: true };
-  const isText = st._first === 'text' || st.text || shape === 'text' || ((st.strokeColor === 'none' || !st.strokeColor && st.text) && (st.fillColor === 'none' || !st.fillColor) && cell.text);
-  if (isText) return { kind: 'label', params: {}, heuristic: true };
+  if (isTextCell(cell)) return { kind: 'label', params: {}, heuristic: true };
   if (RECT_LIKE.has(shape.toLowerCase()) || st.rounded !== undefined && !st.shape) {
     const { w, h } = cell.box; const thin = Math.min(w, h) / Math.max(w, h || 1);
     const fill = st.fillColor && st.fillColor !== 'none' ? st.fillColor : '#ffffff';
@@ -176,6 +177,12 @@ export function classifyCell(cell, userRules = []) {
     return { kind: 'room', params: {}, heuristic: true, furnitureGuess: m };
   }
   return { kind: 'unknown', params: {}, unknown: true };
+}
+
+function isTextCell(cell) {
+  if (cell.edge || !cell.box) return false;
+  const st = cell.style;
+  return st._first === 'text' || !!st.text || cell.shapeName === 'text' || !!((st.strokeColor === 'none' || !st.strokeColor && st.text) && (st.fillColor === 'none' || !st.fillColor) && cell.text);
 }
 
 function lumOf(hex) {

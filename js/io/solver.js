@@ -28,6 +28,7 @@ export const DEFAULT_SOLVE_OPTS = {
   userMeasures: {},       // key → metres (answers to "missing" requests)
   overrides: {},          // constraint key → metres | 'off'
   angles: {},             // key → degrees for oblique walls
+  excluded: [],           // pieceKey list: walls removed from the drawing by the user
   doorHeight: 2.10, windowHeight: 1.20, windowSill: 0.90, openingHeight: 2.10,
 };
 
@@ -68,14 +69,19 @@ class AxisUF {
 const median = (arr) => { if (!arr.length) return null; const s = arr.slice().sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const r1 = (v) => Math.round(v * 10) / 10;
 export const pairKey = (A, B, axis) => `pair:${r1(A.x)},${r1(A.y)}|${r1(B.x)},${r1(B.y)}|${axis}`;
+/** Stable key of a wall piece (endpoints in drawing px, order-independent). */
+export const pieceKey = (A, B) => {
+  const [P, Q] = A.x < B.x || (A.x === B.x && A.y <= B.y) ? [A, B] : [B, A];
+  return `wall:${r1(P.x)},${r1(P.y)}|${r1(Q.x)},${r1(Q.y)}`;
+};
 
 export function solvePlan(raw, options = {}) {
   const O = { ...DEFAULT_SOLVE_OPTS, ...options };
   const res = {
     ok: true, complete: true, nodes: [], walls: [], rooms: [], items: [], openingsOut: [],
-    issues: { missing: [], conflicts: [], notes: [], assumptions: 0, estimated: 0 },
-    preview: { nodes: [], pieces: [], openings: [], unknowns: raw.unknowns || [], dims: [], texts: [] },
-    scale: 0.01, constraints: [],
+    issues: { missing: [], conflicts: [], suspicious: [], notes: [], assumptions: 0, estimated: 0 },
+    preview: { nodes: [], pieces: [], excluded: [], openings: [], unknowns: raw.unknowns || [], dims: [], texts: [] },
+    scale: 0.01, constraints: [], positions: [],
   };
   const segs = raw.segments.filter((s) => dist(s.a, s.b) > 1e-6);
   if (!segs.length) { res.ok = false; res.complete = false; res.issues.notes.push({ code: 'noWalls' }); return res; }
@@ -129,6 +135,18 @@ export function solvePlan(raw, options = {}) {
       if (s.own) p.own.push(s);
     }
   }
+  // walls removed by the user: drop their pieces (nodes stay, so keys and indices remain stable)
+  const excluded = new Set(O.excluded || []);
+  if (excluded.size) {
+    const remap = new Map(); const kept = [];
+    for (const p of pieces) {
+      const key = pieceKey(nodes[p.a], nodes[p.b]);
+      if (excluded.has(key)) { res.preview.excluded.push({ key, a: nodes[p.a], b: nodes[p.b] }); pieceMap.delete(`${p.a}-${p.b}`); continue; }
+      remap.set(p.idx, kept.length); p.idx = kept.length; kept.push(p);
+    }
+    pieces.splice(0, pieces.length, ...kept);
+    for (const s of segs) if (s.pieces) s.pieces = s.pieces.filter((i) => remap.has(i)).map((i) => remap.get(i));
+  }
   const dirOf = (a, b) => {
     const A = nodes[a], B = nodes[b]; const dx = B.x - A.x, dy = B.y - A.y;
     if (Math.abs(dy) <= AXIS_TOL * Math.abs(dx)) return 'h';
@@ -155,7 +173,7 @@ export function solvePlan(raw, options = {}) {
     let best = null;
     for (let i = 0; i < inside.length; i++) for (let j = i + 1; j < inside.length; j++) {
       const p = inside[i], q = inside[j];
-      if (pieceMap.has(p < q ? `${p}-${q}` : `${q}-${p}`)) continue;
+      if (pieceMap.has(p < q ? `${p}-${q}` : `${q}-${p}`) || excluded.has(pieceKey(nodes[p], nodes[q]))) continue;
       const d = norm(sub(nodes[q], nodes[p]));
       const along = (n, other) => adj[n].some((pc) => {
         const far = pc.a === n ? pc.b : pc.a; const e = norm(sub(nodes[far], nodes[n]));
@@ -232,7 +250,7 @@ export function solvePlan(raw, options = {}) {
   };
   // wall / room-side labels
   for (const s of segs) {
-    if (!s.measure?.value || s.na === s.nb) continue;
+    if (!s.measure?.value || s.na === s.nb || !s.pieces?.length) continue;
     addC({ na: s.na, nb: s.nb, value: s.measure.value, mode: s.measure.mode || (s.own ? 'axis' : null), angle: s.measure.angle ?? s.angle, src: { type: 'label', cellId: s.cellId, text: fmtSrc(s.measure.value) }, key: `seg:${s.cellId}:${s.piece}`, pieces: s.pieces });
   }
   // rooms "W x D"
@@ -243,7 +261,7 @@ export function solvePlan(raw, options = {}) {
     const L01 = dist(r.poly[0], r.poly[1]), L12 = dist(r.poly[1], r.poly[2]);
     const [wv, dv, swapped] = matchWxd(r.wxd, L01, L12);
     if (swapped) res.issues.notes.push({ code: 'wxdSwapped', name: r.name });
-    const mk = (s, v, tag) => addC({ na: s.na, nb: s.nb, value: v, mode: r.mode, src: { type: 'room', cellId: r.cellId, name: r.name, text: `${r.name || ''} ${fmtSrc(r.wxd[0])}×${fmtSrc(r.wxd[1])}`.trim() }, key: `room:${r.cellId}:${tag}`, pieces: s.pieces });
+    const mk = (s, v, tag) => s.pieces?.length && addC({ na: s.na, nb: s.nb, value: v, mode: r.mode, src: { type: 'room', cellId: r.cellId, name: r.name, text: `${r.name || ''} ${fmtSrc(r.wxd[0])}×${fmtSrc(r.wxd[1])}`.trim() }, key: `room:${r.cellId}:${tag}`, pieces: s.pieces });
     mk(sides[0], wv, 'w0'); mk(sides[2], wv, 'w1'); mk(sides[1], dv, 'd0'); mk(sides[3], dv, 'd1');
   }
   // dimension lines → nearest aligned nodes
@@ -273,6 +291,7 @@ export function solvePlan(raw, options = {}) {
     if (!p || p.measure == null || p.name || p.wxd) continue;
     let best = null;
     for (const s of segs) {
+      if (!s.pieces?.length) continue;
       const tt = projT(t.pos, s.a, s.b); if (tt < 0.05 || tt > 0.95) continue;
       const dd = distPointSeg(t.pos, s.a, s.b);
       const score = dd + (s.measure ? maxTextDist * 0.5 : 0);
@@ -306,13 +325,30 @@ export function solvePlan(raw, options = {}) {
   // user answers
   for (const [key, val] of Object.entries(O.userMeasures)) {
     if (!(val > 0)) continue;
-    const m = key.match(/^pair:([-\d.]+),([-\d.]+)\|([-\d.]+),([-\d.]+)\|(x|y|len)$/);
+    const m = key.match(/^pair:([-\d.]+),([-\d.]+)\|([-\d.]+),([-\d.]+)\|(x|y|len)(\|axis)?$/);
     if (!m) continue;
     const na = nearestNode(nodes, { x: +m[1], y: +m[2] }, tol * 2), nb = nearestNode(nodes, { x: +m[3], y: +m[4] }, tol * 2);
     if (na == null || nb == null) continue;
-    addC({ na, nb, value: val, src: { type: 'user', text: fmtSrc(val) }, key, forceKind: m[5] });
+    addC({ na, nb, value: val, mode: m[6] ? 'axis' : null, src: { type: 'user', text: fmtSrc(val) }, key, forceKind: m[5] });
   }
   res.constraints = C;
+
+  // ---------- 6b. suspicious units ----------
+  // A length that disagrees with the drawing scale by ~100× was almost certainly read in the wrong
+  // unit ("19" meant as cm but read as m). Propose the value that matches the drawing.
+  for (const c of C) {
+    if (c.overridden || !['label', 'text', 'dimension'].includes(c.src.type)) continue;
+    const A = nodes[c.a], B = nodes[c.b];
+    const px = c.kind === 'x' ? Math.abs(B.x - A.x) : c.kind === 'y' ? Math.abs(B.y - A.y) : dist(A, B);
+    if (px < 0.5) continue;
+    const drawn = px * scale;
+    const q = c.typed / drawn;
+    if (q < 8 && q > 1 / 8) continue;
+    const cands = [c.typed / 100, c.typed / 1000, c.typed * 100].filter((v) => v / drawn > 1 / 3 && v / drawn < 3);
+    if (!cands.length) continue;
+    const proposed = cands.sort((u, v) => Math.abs(Math.log(u / drawn)) - Math.abs(Math.log(v / drawn)))[0];
+    res.issues.suspicious.push({ key: c.key, src: c.src, typed: c.typed, proposed: Math.round(proposed * 10000) / 10000, drawn, pieces: c.pieces, a: c.a, b: c.b });
+  }
 
   // ---------- 7. solve ----------
   const X = new AxisUF(nodes.length), Y = new AxisUF(nodes.length);
@@ -395,6 +431,12 @@ export function solvePlan(raw, options = {}) {
     // union-find over components for Kruskal
     const comp = new Map([...roots].map((r) => [r, r]));
     const cf = (r) => { while (comp.get(r) !== r) r = comp.get(r); return r; };
+    // slanted walls with a known length are linked as soon as their angle is given (asked below)
+    for (const c of lenCs) {
+      if (c.done) continue;
+      const ra = U.find(c.a), rb = U.find(c.b);
+      if (comp.has(ra) && comp.has(rb) && cf(ra) !== cf(rb)) comp.set(cf(rb), cf(ra));
+    }
     const cands = [];
     for (const p of pieces) {
       if (p.dir === (axis === 'x' ? 'v' : 'h')) continue;
@@ -429,7 +471,7 @@ export function solvePlan(raw, options = {}) {
     // estimate in the user's chosen mode (net subtracts the half thicknesses again)
     const dirv = norm(sub(B, A));
     const adjust = O.mode === 'net' ? halfPerp(a, kind === 'x' ? { x: 1, y: 0 } : kind === 'y' ? { x: 0, y: 1 } : dirv) + halfPerp(b, kind === 'x' ? { x: 1, y: 0 } : kind === 'y' ? { x: 0, y: 1 } : dirv) : 0;
-    return { key: pairKey(A, B, kind), kind, a, b, pa: { ...A }, pb: { ...B }, piece: pieceIdx, free, estimate: Math.max(0.01, est - adjust), exterior: pieceIdx != null ? pieces[pieceIdx].exterior : false };
+    return { key: pairKey(A, B, kind), kind, a, b, pa: { ...A }, pb: { ...B }, piece: pieceIdx, free, estimate: Math.max(0.01, est - adjust), axisEstimate: est, tiny: est - adjust < 0.02, exterior: pieceIdx != null ? pieces[pieceIdx].exterior : false };
   };
   findMissing(X, 'x'); findMissing(Y, 'y');
   for (const c of lenCs) if (!c.done) {
@@ -461,6 +503,7 @@ export function solvePlan(raw, options = {}) {
   let mx = Infinity, my = Infinity;
   usedNodes.forEach((i) => { mx = Math.min(mx, px.pos[i]); my = Math.min(my, py.pos[i]); });
   const M = nodes.map((_, i) => ({ x: px.pos[i] - mx, y: py.pos[i] - my }));
+  res.positions = M;
 
   // affine px → m (for items, labels, openings far from walls)
   const fit = (coord, P) => {
@@ -484,7 +527,7 @@ export function solvePlan(raw, options = {}) {
   res.preview.pieces = pieces.map((p) => {
     const sameX = X.same(p.a, p.b), sameY = Y.same(p.a, p.b);
     let status = missingPieces.has(p.idx) ? 'missing' : conflictPieces.has(p.idx) ? 'conflict' : measuredPieces.has(p.idx) ? 'measured' : sameX && sameY ? 'derived' : 'estimated';
-    return { idx: p.idx, a: nodes[p.a], b: nodes[p.b], status, len: dist(M[p.a], M[p.b]), exterior: p.exterior, bridge: p.bridge, missingIndex: missingPieces.get(p.idx) };
+    return { idx: p.idx, key: pieceKey(nodes[p.a], nodes[p.b]), a: nodes[p.a], b: nodes[p.b], status, len: dist(M[p.a], M[p.b]), exterior: p.exterior, bridge: p.bridge, missingIndex: missingPieces.get(p.idx) };
   });
 
   // ---------- 11. geometry in metres ----------
