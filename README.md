@@ -9,7 +9,7 @@
 Draw your home in [draw.io](https://app.diagrams.net), write the lengths on the walls, import it,
 and try out furniture before you buy it: check sizes, walkways and how it will actually look.
 
-[**Open the app**](https://<mio-utente-github>.github.io/Murello/) · [Try the example](https://<mio-utente-github>.github.io/Murello/?example=appartamento) · [Leggi in italiano](README.it.md)
+[**Open the app**](https://follen99.github.io/Murello/) · [Try the example](https://follen99.github.io/Murello/?example=appartamento) · [Leggi in italiano](README.it.md)
 
 ![No build step](https://img.shields.io/badge/build-none-30353b)
 ![three.js r186](https://img.shields.io/badge/three.js-r186-30353b)
@@ -190,7 +190,7 @@ Shortcuts: `1` `2` `3` views · `R` rotate · `Del` delete · `Ctrl+D` duplicate
 
 1. Create a public repository (e.g. `murello`) and push these files to `main`.
 2. *Settings ▸ Pages ▸ Build and deployment*: **Deploy from a branch**, branch `main`, folder `/ (root)`.
-3. Open `https://<mio-utente-github>.github.io/Murello/` and replace `<mio-utente-github>` in this README.
+3. Open `https://follen99.github.io/Murello/`.
 
 There is no build step: the site is plain ES modules plus a vendored, minified three.js. `.nojekyll` keeps GitHub from processing the files.
 

@@ -9,7 +9,7 @@
 Disegna casa tua su [draw.io](https://app.diagrams.net), scrivi le misure sui muri, importala
 e prova i mobili prima di comprarli: dimensioni, passaggi e come verrà davvero.
 
-[**Apri l'app**](https://<mio-utente-github>.github.io/Murello/) · [Prova l'esempio](https://<mio-utente-github>.github.io/Murello/?example=appartamento) · [Read in English](README.md)
+[**Apri l'app**](https://follen99.github.io/Murello/) · [Prova l'esempio](https://follen99.github.io/Murello/?example=appartamento) · [Read in English](README.md)
 
 ![Nessuna build](https://img.shields.io/badge/build-nessuna-30353b)
 ![three.js r186](https://img.shields.io/badge/three.js-r186-30353b)
@@ -190,7 +190,7 @@ Scorciatoie: `1` `2` `3` viste · `R` ruota · `Canc` elimina · `Ctrl+D` duplic
 
 1. Crea una repository pubblica (es. `murello`) e carica questi file sul branch `main`.
 2. *Settings ▸ Pages ▸ Build and deployment*: **Deploy from a branch**, branch `main`, cartella `/ (root)`.
-3. Apri `https://<mio-utente-github>.github.io/Murello/` e sostituisci `<mio-utente-github>` nei README.
+3. Apri `https://follen99.github.io/Murello/`.
 
 Non serve nessuna build: il sito è fatto di moduli ES e di una copia minificata di three.js. Il file `.nojekyll` evita che GitHub elabori i file.
 
