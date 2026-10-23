@@ -1,0 +1,13 @@
+{
+  "name": "murello",
+  "version": "1.0.0",
+  "description": "From a draw.io floor plan to a furnishable 3D house, in the browser.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/labels.test.mjs && node tests/roundtrip.test.mjs",
+    "serve": "python3 -m http.server 8080"
+  },
+  "devDependencies": { "linkedom": "^0.18.0" },
+  "license": "MIT"
+}
